@@ -1,0 +1,176 @@
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>physicsSphere</title>
+        <meta charset="utf-8">
+    </head>
+    <body>
+        <style type="text/css">
+            body {
+                margin: 0;
+                padding: 0;
+            }
+        </style>
+        <script src="libs/cannon.min.js"></script>
+        <script src="libs/three.min.js"></script>
+        <script>
+            var sphereRadius = 0.2;
+            var forceRatio = 0.1;
+            var deviceOrientationX = 0;
+            var deviceOrientationY = 0;
+            var deviceOrientationZ = 0;
+
+            // CANNON.js - physics
+            var world = null;
+            var phyPlane = null;
+            var phySphere = null;
+            
+            // three.js - render
+            var scene = null;
+            var camera = null;
+            var renderer = null;
+
+            // view
+            var viewPlane = null;
+            var viewSphere = null;
+
+            setPhy();
+            setView();
+            animate();
+
+            function setPhy() {
+                // 物理世界を生成
+                world = new CANNON.World();
+                // 重力を設定
+                world.gravity.set(0, -10, 0);
+                // ぶつかっている「可能性のある」剛体同士を見つける作業
+                world.broadphase = new CANNON.NaiveBroadphase();
+                // 反復計算回数
+                world.solver.iterations = 10;
+                // 許容値
+                world.solver.tolerance = 0.1;
+
+                // 地面用にPlaneの剛体を質量0で生成
+                var phyPlaneMaterial = new CANNON.Material("phyPlaneMaterial");
+                phyPlane = new CANNON.Body({mass: 0,material: phyPlaneMaterial});
+                phyPlane.addShape(new CANNON.Plane());
+                // X軸に90度に回転
+                phyPlane.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+                // 物理世界に追加
+                world.add(phyPlane);
+
+                // Sphereのシェイプの剛体を質量1で生成
+                var phySphereMaterial = new CANNON.Material("phySphereMaterial");
+                phySphere = new CANNON.Body({mass: 1, material: phySphereMaterial});
+                phySphere.addShape(new CANNON.Sphere(sphereRadius, 16, 16));
+                phySphere.position.y = sphereRadius;
+                phySphere.position.x = 0
+                // 減衰率
+                phySphere.angularDamping = 0.1;
+
+                var sphereGroundContactMaterial = new CANNON.ContactMaterial(
+                    phyPlaneMaterial, //ひとつ目のマテリアル
+                    phySphereMaterial,   //ふたつ目のマテリアル
+                    { friction: 0.0, restitution: 0.9 } //friction（摩擦係数）restitution（反発係数）
+                );
+                world.addContactMaterial(sphereGroundContactMaterial);
+
+
+                // sphereを世界に追加
+                world.add(phySphere);
+            }
+
+            function setView() {
+                scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(0x000000, 1, 100);
+                
+                // camera
+                camera = new THREE.PerspectiveCamera(30, 800 / 600, 1, 10000);
+                camera.position.set(0, 5, -20);
+                camera.lookAt(new THREE.Vector3(0, 0, 0));
+                scene.add(camera);
+
+                // light
+                var light = new THREE.DirectionalLight(0xffffff, 2);
+                light.position.set(10, 10, -10);
+                light.castShadow = true;
+                light.shadowMapWidth = 1024;
+                light.shadowMapHeight = 1024;
+                light.shadowCameraLeft = -10;
+                light.shadowCameraRight = 10;
+                light.shadowCameraTop = 10;
+                light.shadowCameraBottom = -10;
+                light.shadowCameraFar = 100;
+                light.shadowCameraNear = 0;
+                light.shadowDarkness = 0.5;
+                scene.add(light);
+                var amb   = new THREE.AmbientLight(0x999999);
+                scene.add(amb);
+
+                // sphere
+                viewSphere = new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 16, 16), new THREE.MeshPhongMaterial({
+                    color: 0x999999,
+                    specular: 0xffffff,
+                    shininess: 50
+                }));
+                viewSphere.castShadow = true;
+                viewSphere.receiveShadow = true;
+                viewSphere.position.y = 1;
+                scene.add(viewSphere);
+
+                // ground
+                viewPlane = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshPhongMaterial({
+                    color: 0x555555,
+                    specular: 0xffffff,
+                    shininess: 50
+                }));
+                viewPlane.rotation.x = -Math.PI / 2;
+                viewPlane.receiveShadow = true;
+                scene.add(viewPlane);
+                renderer = new THREE.WebGLRenderer({antialias: true});
+                renderer.setPixelRatio( window.devicePixelRatio );
+                renderer.setSize(800, 600);
+                renderer.setClearColor(0x000000, 1);
+                
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFShadowMap;
+                document.body.appendChild(renderer.domElement);
+                renderer.render(scene, camera);
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                // 物理エンジンの時間を進める
+                world.step(1 / 60);
+
+                // add force to the top of the sphere
+                var forceTarget = new CANNON.Vec3(phySphere.position.x, phySphere.position.y+sphereRadius, phySphere.z);
+                var forceValue = new CANNON.Vec3(-deviceOrientationY * forceRatio, 0, -deviceOrientationX * forceRatio);
+
+                phySphere.applyForce(forceValue, forceTarget);
+
+                // update positon
+                viewSphere.position.copy(phySphere.position);
+                // update quaternion
+                viewSphere.quaternion.copy(phySphere.quaternion);
+
+                // レンダリング
+                renderer.render(scene, camera);
+            }
+
+            // senser
+            // DeviceOrientation Event
+            window.addEventListener("deviceorientation", deviceorientationHandler);
+            // ジャイロセンサーの値が変化
+            function deviceorientationHandler(event) {
+              // X軸
+              deviceOrientationX = event.beta;
+              // Y軸
+              deviceOrientationY = event.gamma;
+              // Z軸
+              deviceOrientationZ = event.alpha;
+            }
+        </script>
+    </body>
+</html>

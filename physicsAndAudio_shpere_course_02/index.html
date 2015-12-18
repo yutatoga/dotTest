@@ -1,0 +1,216 @@
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>sample01</title>
+        <meta charset="utf-8">
+    </head>
+    <body>
+        <style type="text/css">
+            body {
+                margin: 0;
+                padding: 0;
+            }
+        </style>
+        <script src="libs/cannon.min.js"></script>
+        <script src="libs/three.min.js"></script>
+        <script>
+
+            var world = null;
+            var scene = null;
+            var camera = null;
+            var renderer = null;
+            var SPHERE_SIZE = 0.5;
+            var boxSizeX = 1;
+            var boxSizeY = 0.5;
+            var boxSizeZ = 3;
+            var boxNumber = 3;
+            // physics
+            var phyPlane = null;
+            var phySphere = null;
+            var phyBoxes = [];
+            // view
+            var viewPlane = null;
+            var viewSphere = null;
+            var viewCubes = [];
+
+            // web audio
+            var context = new AudioContext();
+
+            setPhy();
+            setView();
+            animate();
+
+            function setPhy() {
+                // 物理世界を生成
+                world = new CANNON.World();
+                // 重力を設定
+                world.gravity.set(0, -9.82, 0);
+                // ぶつかっている「可能性のある」剛体同士を見つける作業
+                world.broadphase = new CANNON.NaiveBroadphase();
+                // 反復計算回数
+                world.solver.iterations = 10;
+                // 許容値
+                world.solver.tolerance = 0.1;
+
+                // 地面用にPlaneの剛体を質量0で生成
+                var phyPlaneMaterial = new CANNON.Material("phyPlaneMaterial");
+                phyPlane = new CANNON.Body({mass: 0,material: phyPlaneMaterial});
+                phyPlane.addShape(new CANNON.Plane());
+                // X軸に90度に回転
+                phyPlane.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+                // 物理世界に追加
+                world.add(phyPlane);
+
+                // Sphereのシェイプの剛体を質量1で生成
+                var phySphereMaterial = new CANNON.Material("phySphereMaterial");
+                phySphere = new CANNON.Body({mass: 1, material: phySphereMaterial});
+                phySphere.addShape(new CANNON.Sphere(SPHERE_SIZE, 16, 16));
+                phySphere.position.y = 10;
+                phySphere.position.x = 0
+                // 減衰率
+                phySphere.angularDamping = 0.1;
+
+                var sphereGroundContactMaterial = new CANNON.ContactMaterial(
+                    phyPlaneMaterial, //ひとつ目のマテリアル
+                    phySphereMaterial,   //ふたつ目のマテリアル
+                    { friction: 0.0, restitution: 0.5 } //friction（摩擦係数）restitution（反発係数）
+                );
+                world.addContactMaterial(sphereGroundContactMaterial);
+
+                // Boxのシェイプの剛体を質量1で生成
+                var phyBoxMaterial = new CANNON.Material("phyBoxMaterial");
+                var boxSphereContactMaterial = new CANNON.ContactMaterial(
+                    phyBoxMaterial, //ひとつ目のマテリアル
+                    phySphereMaterial,   //ふたつ目のマテリアル
+                    { friction: 0.0, restitution: 0.5 } //friction（摩擦係数）restitution（反発係数）
+                    );
+                world.addContactMaterial(boxSphereContactMaterial);
+                for (var i = 0; i < boxNumber; i++){
+                    var phyBox = new CANNON.Body({mass: 0, material: phyBoxMaterial});
+                    phyBox.addShape(new CANNON.Box(new CANNON.Vec3(boxSizeX/2.0, boxSizeY/2.0, boxSizeZ/2.0)));
+                    phyBox.position.y = 2 * (boxNumber-i);
+                    phyBox.position.x = 2 * i;
+                    // 角速度を設定
+                    phyBox.angularVelocity.set(10, 10, 10);
+                    // 減衰率
+                    phyBox.angularDamping = 0.1;
+
+                    // web audio
+                    // collision detection
+                    phyBox.addEventListener("collide", function(e){
+                        console.log("The sphere just collided with the ground!");
+                        // console.log("Collided with body:",e.body);
+                        // console.log("Contact between bodies:",e.contact);
+                        
+                        // play sound effectr for collision
+                        // re-create AudioBufferSourceNode
+                        var buffer = null;
+                        var source = context.createBufferSource();
+                        var request = new XMLHttpRequest();
+                        request.open('GET', 'audio/'+i+'.mp3', true);
+                        request.responseType = 'arraybuffer';
+                        request.send();
+                        request.onload = function () {
+                            var res = request.response;
+                            context.decodeAudioData(res, function (buf) {
+                                source.buffer = buf;
+                            });
+                        };
+                        source.connect(context.destination);
+                        source.start(0);
+                    });
+                    phyBoxes.push(phyBox);
+                    // 物理世界に追加
+                    world.add(phyBox);
+                }
+                // sphereを世界に追加
+                world.add(phySphere);
+            }
+
+            function setView() {
+                scene = new THREE.Scene();
+                scene.fog = new THREE.Fog(0x000000, 1, 100);
+                camera = new THREE.PerspectiveCamera(30, 800 / 600, 1, 10000);
+                camera.position.set(Math.cos(Math.PI / 5) * 40, 10, 20+Math.sin(Math.PI / 5) * 40);
+                camera.lookAt(new THREE.Vector3(0, 0, 0));
+                scene.add(camera);
+
+                // light
+                var light = new THREE.DirectionalLight(0xffffff, 2);
+                light.position.set(10, 10, -10);
+                light.castShadow = true;
+                light.shadowMapWidth = 1024;
+                light.shadowMapHeight = 1024;
+                light.shadowCameraLeft = -10;
+                light.shadowCameraRight = 10;
+                light.shadowCameraTop = 10;
+                light.shadowCameraBottom = -10;
+                light.shadowCameraFar = 100;
+                light.shadowCameraNear = 0;
+                light.shadowDarkness = 0.5;
+                scene.add(light);
+                var amb   = new THREE.AmbientLight(0x999999);
+                scene.add(amb);
+
+                // sphere
+                viewSphere = new THREE.Mesh(new THREE.SphereGeometry(SPHERE_SIZE, 16, 16), new THREE.MeshPhongMaterial({
+                    color: 0xc0392b, // red
+                    specular: 0xffffff,
+                    shininess: 50
+                }));
+                viewSphere.castShadow = true;
+                viewSphere.receiveShadow = true;
+                viewSphere.position.y = 1;
+                scene.add(viewSphere);
+
+                // box 
+                for(var i = 0; i < phyBoxes.length; i++){
+                    var viewCube = new THREE.Mesh(new THREE.CubeGeometry(boxSizeX, boxSizeY, boxSizeZ, 10, 10), new THREE.MeshLambertMaterial({
+                        color: 0xffffff
+                    }));
+                    viewCube.castShadow = true;
+                    viewCube.receiveShadow = true;
+                    viewCubes.push(viewCube);
+                    scene.add(viewCube);
+                }
+
+                // ground
+                viewPlane = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshPhongMaterial({
+                    color: 0x555555,
+                    specular: 0xffffff,
+                    shininess: 50
+                }));
+                viewPlane.rotation.x = -Math.PI / 2;
+                viewPlane.receiveShadow = true;
+                scene.add(viewPlane);
+
+                // render
+                renderer = new THREE.WebGLRenderer({antialias: true});
+                renderer.setPixelRatio( window.devicePixelRatio );
+                renderer.setSize(800, 600);
+                renderer.setClearColor(0x000000, 1);
+                
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFShadowMap;
+                document.body.appendChild(renderer.domElement);
+                renderer.render(scene, camera);
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                // 物理エンジンの時間を進める
+                world.step(1 / 60);
+                viewSphere.position.copy(phySphere.position);
+                viewSphere.quaternion.copy(phySphere.quaternion);
+
+                for (var i = 0; i < viewCubes.length; i++){
+                    viewCubes[i].position.copy(phyBoxes[i].position);
+                    viewCubes[i].quaternion.copy(phyBoxes[i].quaternion);                    
+                }
+                // レンダリング
+                renderer.render(scene, camera);
+            }
+        </script>
+    </body>
+</html>

@@ -1,0 +1,304 @@
+<html>
+    <head>
+        <title>demo</title>
+        <style>
+            body { margin: 0; }
+            canvas { width: 100%; height: 100% }
+            </style>
+    </head>
+    <body>
+        <script src="js/three.min.js"></script>
+        <script src="js/Foo.js"></script>
+        <script src="js/tween.js"></script>
+        <h1 id = "debug1">foo</h1>
+        <h1 id = "debug2">bar</h1>
+        <script>
+            // load class
+           	var foo = new Foo("bar");
+            foo.qux();
+
+            // Three.js -----------------------------------------------------------------------------------------
+            // scene
+            var scene = new THREE.Scene();
+            
+            // render
+            var renderer = new THREE.WebGLRenderer();
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            document.body.appendChild( renderer.domElement );
+            
+            // light
+            // do nothing
+            
+            // camera
+            var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+            camera.position.z = 10;
+            
+            // welcome page
+            // - cube
+            var geometry = new THREE.BoxGeometry( 1, 1, 1 );
+            var material = new THREE.MeshBasicMaterial( { color: 0xff0000} );
+            var cube = new THREE.Mesh( geometry, material );
+            // - wire frame
+            var materialWire = new THREE.MeshBasicMaterial( { color: 0x000000, wireframe:true } );
+            var cubeWire = new THREE.Mesh(geometry, materialWire);
+
+            // add wire frame to cube
+            cube.add(cubeWire);
+            
+            // add cube to scene
+            scene.add( cube );
+
+            var colorTheta = 0;
+            var colorThetaDiff = 0.05;
+            var cubeRotationSpeed = 0.005;
+            var deadColorChangeSpeed = 0.01;
+            var touched = false;
+            
+            var pageId = 0;
+            
+            // render loop
+            var render = function () {
+                requestAnimationFrame( render );
+                
+                // Tween
+                TWEEN.update();
+
+                switch(pageId){
+                    case 0:{
+                        // welcome page
+                        if(!touched){
+                            cube.rotation.x += cubeRotationSpeed;
+                            cube.rotation.y += cubeRotationSpeed;
+                            colorTheta += colorThetaDiff;
+                            material.color.r = Math.abs(Math.sin(colorTheta))*0.25+0.75;
+                        }else{
+                            cube.rotation.x += cubeRotationSpeed;
+                            cube.rotation.y += cubeRotationSpeed;
+                            colorTheta += colorThetaDiff;
+                            material.color.r -= deadColorChangeSpeed;
+                            if(material.color.r < 0){
+                                // got to game page
+                                // scene.remove(cube);
+                                pageId = 1;
+
+                                // initialize for page 1
+                                cube.rotation.x = 0;
+                                cube.rotation.y = 0;
+                                cubeRotationSpeed = 0.01;
+                                material.color.r = 1;
+
+                                // music play
+                                audio.play();
+                            }
+                        }
+                    }
+                    break;
+                    case 1:{
+                        // game page
+                        cube.rotation.x += cubeRotationSpeed;
+                        cube.rotation.y += cubeRotationSpeed;
+                        colorTheta += colorThetaDiff;
+                        material.color.r = Math.abs(Math.sin(colorTheta))*0.25+0.75;
+                    }
+                    break;
+                    default:
+                    break;
+                }
+                renderer.render(scene, camera);
+            };
+        render();
+        
+        // touch
+        if(window.TouchEvent){
+            if(document.addEventListener){
+                function TouchEventFunc(e){
+                    switch(e.type){
+                        case "touchstart":
+                        touched = true;
+                        // tweenPositiveX.start();
+                        break;
+                        case "touchend":
+                        // do nothing
+                        break;
+                        default:
+                        console.log("switch defalut: TouchEventFunc");
+                        break;
+                    }
+                }
+                document.addEventListener("touchstart",TouchEventFunc);
+                document.addEventListener("touchend", TouchEventFunc);
+            }
+        }
+
+        // DeviceMotion Event
+        // acceleration
+        var accelerationX = 0;
+        var accelerationY = 0;
+        var accelerationZ = 0;
+        // shake detection
+        var shakeThreshould = 15;
+        var shakeDetectionInterval = 1000;
+        var shakeLastTime = 0;
+        // listener
+        window.addEventListener("devicemotion", devicemotionHandler);
+        function devicemotionHandler(event) {
+            accelerationX = event.acceleration.x;
+            accelerationY = event.acceleration.y;
+            accelerationZ = event.acceleration.z;
+            // DELETE ME: debug
+           	// document.getElementById("debug1").innerHTML = "x:"+accelerationX + "<br>y:"+accelerationY + "<br>z:"+accelerationZ;
+            // shake detection
+            if(new Date().getTime()-shakeLastTime > shakeDetectionInterval){
+            	if (accelerationX > shakeThreshould){
+            		document.getElementById("debug2").innerHTML = "shaked: +x =" + accelerationX;
+            		// save current time
+	            	shakeLastTime = new Date().getTime();
+	            	// update cube position
+	            	tweenNegativeX.start();
+            	} else if(accelerationX < -shakeThreshould){
+            		document.getElementById("debug2").innerHTML = "shaked: -x =" + accelerationX;
+            		// save current time
+	            	shakeLastTime = new Date().getTime();
+	            	// update cube position
+	            	tweenPositiveX.start();
+            	} else if (accelerationY > shakeThreshould) {
+            		document.getElementById("debug2").innerHTML = "shaked: +y =" + accelerationY;
+            		// save current time
+	            	shakeLastTime = new Date().getTime();
+	            	// update cube position
+	            	tweenNegativeY.start();
+            	} else if (accelerationY < -shakeThreshould) {
+            		document.getElementById("debug2").innerHTML = "shaked: -y =" + accelerationY;
+            		// save current time
+	            	shakeLastTime = new Date().getTime();
+	            	// update cube position
+	            	tweenPositiveY.start();
+            	} else if (accelerationZ > shakeThreshould){
+            		document.getElementById("debug2").innerHTML = "shaked: +z =" + accelerationZ;
+            		// save current time
+	            	shakeLastTime = new Date().getTime();
+            	} else if (accelerationZ < -shakeThreshould){
+            		document.getElementById("debug2").innerHTML = "shaked: -z =" + accelerationZ;
+            		// save current time
+            		shakeLastTime = new Date().getTime();
+            	}
+            }
+        }
+        // Tween
+        var tweenTime = 500;
+        var tweenTimeBackToOrigin = 1000;
+        var moveLength = 2;
+        // shake +x
+        var positionPositiveX = {x: 0, y: 0};
+        var tweenPositiveX = new TWEEN.Tween(positionPositiveX)
+					        .to({x: +moveLength, y: 0}, tweenTime)
+					        .onUpdate(function(){
+					        	cube.position.x = positionPositiveX.x;
+					        	cube.position.y = positionPositiveX.y;
+					        })
+					        .onComplete(function(){
+					        	positionPositiveX.x = 0;
+					        	positionPositiveX.y = 0;
+					        })
+					        .easing(TWEEN.Easing.Elastic.InOut);
+		
+		var positionBackToOriginFromPositiveX = {x:+moveLength, y:0};
+		var tweenBackToOriginFromPositiveX = new TWEEN.Tween(positionBackToOriginFromPositiveX)
+											.to({x: 0, y:0}, tweenTimeBackToOrigin)
+											.easing(TWEEN.Easing.Elastic.InOut)
+											.onUpdate(function(){
+												cube.position.x = positionBackToOriginFromPositiveX.x;
+												cube.position.y = positionBackToOriginFromPositiveX.y;
+											})
+											.onComplete(function(){
+												positionBackToOriginFromPositiveX.x = +moveLength;
+												positionBackToOriginFromPositiveX.y = 0;
+											});
+		tweenPositiveX.chain(tweenBackToOriginFromPositiveX);
+
+        // shaek -x
+        var positionNegativeX = {x: 0, y: 0};
+        var tweenNegativeX = new TWEEN.Tween(positionNegativeX)
+        					.to({x: -moveLength, y:0}, tweenTime)
+					        .onUpdate(function(){
+					        	cube.position.x = positionNegativeX.x;
+					        	cube.position.y = positionNegativeX.y;
+					        })
+					        .onComplete(function(){
+					        	positionNegativeX.x = 0;
+					        	positionNegativeX.y = 0;
+					        })
+        					.easing(TWEEN.Easing.Elastic.InOut);
+        var positionBackToOriginFromNegativeX = {x:-moveLength, y:0};
+        var tweenBackToOriginFromNegativeX = new TWEEN.Tween(positionBackToOriginFromNegativeX)
+											.to({x: 0, y:0}, tweenTimeBackToOrigin)
+											.easing(TWEEN.Easing.Elastic.InOut)
+											.onUpdate(function(){
+												cube.position.x = positionBackToOriginFromNegativeX.x;
+												cube.position.y = positionBackToOriginFromNegativeX.y;
+											})
+											.onComplete(function(){
+												positionBackToOriginFromNegativeX.x = -moveLength;
+												positionBackToOriginFromNegativeX.y = 0;
+											});
+		tweenNegativeX.chain(tweenBackToOriginFromNegativeX);
+
+        // shake +y
+        var positionPositiveY = {x: 0, y: 0};
+        var tweenPositiveY = new TWEEN.Tween(positionPositiveY)
+        					.to({x: 0, y:+moveLength}, tweenTime)
+        					.onUpdate(function(){
+					        	cube.position.x = positionPositiveY.x;
+					        	cube.position.y = positionPositiveY.y;
+					        })
+					        .onComplete(function(){
+					        	positionPositiveY.x = 0;
+					        	positionPositiveY.y = 0;
+					        })
+        					.easing(TWEEN.Easing.Elastic.InOut);
+        var positionBackToOriginFromPositiveY = {x: 0, y:+moveLength};
+       	var tweenBackToOriginFromPositiveY = new TWEEN.Tween(positionBackToOriginFromPositiveY)
+											.to({x: 0, y:0}, tweenTimeBackToOrigin)
+											.easing(TWEEN.Easing.Elastic.InOut)
+											.onUpdate(function(){
+												cube.position.x = positionBackToOriginFromPositiveY.x;
+												cube.position.y = positionBackToOriginFromPositiveY.y;
+											})
+											.onComplete(function(){
+												positionBackToOriginFromPositiveY.x = 0;
+												positionBackToOriginFromPositiveY.y = +moveLength;
+											});
+		tweenPositiveY.chain(tweenBackToOriginFromPositiveY);
+        
+        // shake -y
+        var positionNegativeY = {x: 0, y: 0};
+        var tweenNegativeY = new TWEEN.Tween(positionNegativeY)
+        					.to({x:0, y:-moveLength}, tweenTime)
+					        .onUpdate(function(){
+					        	cube.position.x = positionNegativeY.x;
+					        	cube.position.y = positionNegativeY.y;
+					        })
+					        .onComplete(function(){
+					        	positionNegativeY.x = 0;
+					        	positionNegativeY.y = 0;
+					        })
+					        .easing(TWEEN.Easing.Elastic.InOut);
+		var positionBackToOriginFromNegativeY = {x:0, y:-moveLength};
+		var tweenBackToOriginFromNegativeY = new TWEEN.Tween(positionBackToOriginFromNegativeY)
+											.to({x: 0, y:0}, tweenTimeBackToOrigin)
+											.easing(TWEEN.Easing.Elastic.InOut)
+											.onUpdate(function(){
+												cube.position.x = positionBackToOriginFromNegativeY.x;
+												cube.position.y = positionBackToOriginFromNegativeY.y;
+											})
+											.onComplete(function(){
+												positionBackToOriginFromNegativeY.x = 0;
+												positionBackToOriginFromNegativeY.y = -moveLength;
+											});
+		tweenNegativeY.chain(tweenBackToOriginFromNegativeY);
+        // Web Audio ---------------------------------------------------------------------
+
+
+        </script>
+    </body>
+</html>
